@@ -238,7 +238,7 @@ COFF.SymbolInfo
                     {
                         $StrBuilder = New-Object Text.Stringbuilder(512)
                         # Magically undecorated the convoluted C++ symbol into a proper C++ function definition
-                        [COFF.Functions]::UnDecorateSymbolName($DecoratedSymbol, $StrBuilder, $StrBuilder.Capacity, 0) | Out-Null
+                        [COFF2.Functions]::UnDecorateSymbolName($DecoratedSymbol, $StrBuilder, $StrBuilder.Capacity, 0) | Out-Null
                         $UndecoratedSymbol = $StrBuilder.ToString()
                         $SymbolType = 'C++'
                     }
