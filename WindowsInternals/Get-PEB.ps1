@@ -9,7 +9,7 @@ Author: Matthew Graeber (@mattifestation)
 License: BSD 3-Clause
 Required Dependencies: None
 Optional Dependencies: Get-PEB.format.ps1xml
- 
+
 .DESCRIPTION
 
 Get-PEB returns a fully parsed process environment block (PEB) of any process. Because the PEB and its underlying structure differ according to OS version and architecture, Get-PEB builds the PEB dynamically at runtime. Get-PEB is designed to work in Windows XP - Windows 8 32/64-bit. It will also return the PEB of Wow64 processes.
@@ -149,7 +149,13 @@ http://msdn.microsoft.com/en-us/library/windows/desktop/aa813706(v=vs.85).aspx
 
         $NTDDI_VERSION = Get-WindowsNTDDIVersion
 
-        try { $NativeMethods = @([AppDomain]::CurrentDomain.GetAssemblies() | % { $_.GetTypes() } | ? { $_.FullName -eq 'Microsoft.Win32.NativeMethods' })[0] } catch {}
+        try {
+            $AllNativeMethods = [AppDomain]::CurrentDomain.GetAssemblies() | `
+                                ForEach-Object { try { $_.GetTypes() } catch {} } | `
+                                Where-Object { $_.FullName -eq 'Microsoft.Win32.NativeMethods' }
+            $NativeMethods = $AllNativeMethods[0]
+        } catch {}
+
         $NtProcessBasicInfo = $NativeMethods.GetNestedType('NtProcessBasicInfo', [Reflection.BindingFlags]::NonPublic)
         $NtProcessBasicInfoConstructor = $NtProcessBasicInfo.GetConstructors()[0]
         $ProcessBasicInfo = $NtProcessBasicInfoConstructor.Invoke($null)
@@ -811,7 +817,7 @@ http://msdn.microsoft.com/en-us/library/windows/desktop/aa813706(v=vs.85).aspx
                 $PEB = Get-StructFromMemory -ProcId $ProcessId -MemoryAddress ($ProcessBasicInfo.PebBaseAddress) -StructType ($PEBStruct)
 
                 $ProcessParams = Get-StructFromMemory -ProcId $ProcessId -MemoryAddress ($PEB.ProcessParameters) -StructType ($ProcessParametersStruct)
-                
+
                 $CurrentDirectory = ''
                 $DllPath = ''
                 $ImagePathName = ''
@@ -829,7 +835,7 @@ http://msdn.microsoft.com/en-us/library/windows/desktop/aa813706(v=vs.85).aspx
                 if ($ProcessParams.DesktopInfo.Buffer) { $DesktopInfo = Get-StructFromMemory -ProcId $ProcessId -MemoryAddress ($ProcessParams.DesktopInfo.Buffer) -StructType ([String]) -UnicodeStringSize ($ProcessParams.DesktopInfo.MaximumLength) }
                 if ($ProcessParams.ShellInfo.Buffer) { $ShellInfo = Get-StructFromMemory -ProcId $ProcessId -MemoryAddress ($ProcessParams.ShellInfo.Buffer) -StructType ([String]) -UnicodeStringSize ($ProcessParams.ShellInfo.MaximumLength) }
                 if ($ProcessParams.RuntimeData.Buffer) { $RuntimeData = Get-StructFromMemory -ProcId $ProcessId -MemoryAddress ($ProcessParams.RuntimeData.Buffer) -StructType ([String]) -UnicodeStringSize ($ProcessParams.RuntimeData.MaximumLength) }
-                
+
                 $ProcessParameters = @{
                     MaximumLength = $ProcessParams.MaximumLength
                     Length = $ProcessParams.Length
