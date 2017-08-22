@@ -165,7 +165,7 @@ Known issues:
         [Alias('Modules')]
         [Diagnostics.ProcessModule[]]
         $Module,
-        
+
         [Parameter(ParameterSetName = 'InMemory')]
         [String]
         [ValidateScript({[IO.Directory]::Exists((Resolve-Path $_).Path)})]
@@ -223,7 +223,7 @@ Known issues:
                     return [IntPtr] ($Rva.ToInt64() - ($Section.VirtualAddress - $Section.PointerToRawData))
                 }
             }
-        
+
             # Pointer did not fall in the address ranges of the section headers
             return $Rva
         }
@@ -533,7 +533,7 @@ Known issues:
         $ImageThunkData64 = struct $Mod PE.IMAGE_THUNK_DATA64 @{
             AddressOfData = field 0 Int64
         }
-        
+
         $ImageImportByName = struct $Mod PE.IMAGE_IMPORT_BY_NAME @{
             Hint = field 0 UInt16
             Name = field 1 char
@@ -571,14 +571,14 @@ Known issues:
                 if ($FilePath.Length -gt 1) {
                     foreach ($Path in $FilePath) { Get-PE -FilePath $Path }
                 }
-            
+
                 if (!(Test-Path $FilePath)) {
                     Write-Warning 'Invalid path or file does not exist.'
                     return
                 }
-            
+
                 $FilePath = (Resolve-Path $FilePath).Path
-            
+
                 $ModuleName = $FilePath
                 # Treat a byte array as if it were a file on disk
                 $ImageType = 'File'
@@ -634,7 +634,7 @@ Known issues:
                 # Get handle to the process
                 # PROCESS_VM_READ (0x00000010) | PROCESS_QUERY_INFORMATION (0x00000400)
                 $hProcess = $Kernel32::OpenProcess(0x410, $False, $ProcessID)
-        
+
                 if (-not $hProcess) {
                     throw "Unable to get a process handle for process ID: $ProcessID"
                 }
@@ -681,7 +681,7 @@ Known issues:
 
                         Write-Error $ErrorMessage
                     }
-            
+
                     $null = $Kernel32::CloseHandle($hProcess)
                     [Runtime.InteropServices.Marshal]::FreeHGlobal($PEHeaderAddr)
                     return
@@ -888,7 +888,7 @@ Known issues:
                 } else {
                     Write-Error "Failed to read PE header of process ID: $ProcessID"
                 }
-            
+
                 $null = $Kernel32::CloseHandle($hProcess)
                 [Runtime.InteropServices.Marshal]::FreeHGlobal($PEBase)
 
@@ -943,7 +943,7 @@ Known issues:
                 $SectionMaxRVA = $SectionHeaders[$i].VirtualAddress + $SectionSize
                 $SectionRVA = $SectionHeaders[$i].VirtualAddress
             }
-                
+
             $MaxFileOffset = $SectionHeaders[$i].PointerToRawData + $SectionHeaders[$i].SizeOfRawData
 
             if ($MaxFileOffset -gt $SizeOfPEFile) {
@@ -1160,6 +1160,8 @@ Known issues:
                     {
                         $Result['Ordinal'] = $ThunkData.AddressOfData -band (-bnot $OrdinalFlag)
                         $Result['FunctionName'] = ''
+                        $Result['FunctionNameUndecorated'] = ''
+                        $Result['FunctionType'] = ''
                     }
                     else
                     {
@@ -1178,19 +1180,23 @@ Known issues:
 
                         $Result['Ordinal'] = ''
                         $Result['FunctionName'] = $FuncName
+
+                        $FuncNameUndecorated = Get-NativeUndecoratedName($FuncName)
+                        $Result['FunctionNameUndecorated'] = $FuncNameUndecorated.Symbol
+                        $Result['FunctionType'] = $FuncNameUndecorated.SymbolType
                     }
-                
+
                     $Result['RVA'] = $FuncAddr.AddressOfData
 
                     if ($FuncAddr.AddressOfData -eq 0) { break }
                     if ($OFTPtr -eq 0) { break }
-                
+
                     $Import = New-Object PSObject -Property $Result
                     $Import.PSObject.TypeNames.Insert(0, 'PE.Import')
                     $Imports.Add($Import)
-                
+
                     $j++
-                
+
                 }
 
                 $Fields = @{
@@ -1222,12 +1228,12 @@ Known issues:
             $ExportPointer = [IntPtr] ($PEBase.ToInt64() + $NtHeader.OptionalHeader.DataDirectory[0].VirtualAddress)
             # This range will be used to test for the existence of forwarded functions
             $ExportDirLow = $NtHeader.OptionalHeader.DataDirectory[0].VirtualAddress
-            if ($ImageIsDatafile) { 
+            if ($ImageIsDatafile) {
                 $ExportPointer = Convert-RVAToFileOffset $ExportPointer $SectionHeaders $PEBase
                 $ExportDirLow = Convert-RVAToFileOffset $ExportDirLow $SectionHeaders $PEBase
                 $ExportDirHigh = $ExportDirLow.ToInt32() + $NtHeader.OptionalHeader.DataDirectory[0].Size
             } else { $ExportDirHigh = $ExportDirLow + $NtHeader.OptionalHeader.DataDirectory[0].Size }
-            
+
             if (!(Test-Pointer $ExportPointer $ImageExportDir::GetSize() $PEBase $PELen)) {
                 Write-Verbose 'Export directory address exceeded the reported address range.'
             } else {
@@ -1251,7 +1257,7 @@ Known issues:
                 if ($NumFunctions -gt 0) {
                     # Create an empty hash table that will contain indices to exported functions and their RVAs
                     $FunctionHashTable = @{}
-        
+
                     foreach ($i in 0..($NumFunctions - 1)) {
                         $FuncAddr = $AddressOfFunctionsPtr.ToInt64() + ($i * 4)
 
@@ -1265,10 +1271,10 @@ Known issues:
                         # I.E. NumberOfFunction != the number of actual, exported functions.
                         if ($RvaFunction) { $FunctionHashTable[[Int]$i] = $RvaFunction }
                     }
-            
+
                     # Create an empty hash table that will contain indices into RVA array and the function's name
                     $NameHashTable = @{}
-            
+
                     foreach ($i in 0..($NumNames - 1)) {
                         $NamePtr = $AddressOfNamePtr.ToInt64() + ($i * 4)
 
@@ -1297,16 +1303,22 @@ Known issues:
                         $NameOrdinal = [Int][Runtime.InteropServices.Marshal]::ReadInt16($OrdinalPtr)
                         $NameHashTable[$NameOrdinal] = $FuncName
                     }
-            
+
                     foreach ($Key in $FunctionHashTable.Keys) {
                         $Result = @{}
-                
+
                         if ($NameHashTable[$Key]) {
                             $Result['FunctionName'] = $NameHashTable[$Key]
+
+                            $FuncNameUndecorated = Get-NativeUndecoratedName($NameHashTable[$Key])
+                            $Result['FunctionNameUndecorated'] = $FuncNameUndecorated.Symbol
+                            $Result['FunctionType'] = $FuncNameUndecorated.SymbolType
                         } else {
                             $Result['FunctionName'] = ''
+                            $Result['FunctionNameUndecorated'] = ''
+                            $Result['FunctionType'] = ''
                         }
-                
+
                         if (($FunctionHashTable[$Key] -ge $ExportDirLow) -and ($FunctionHashTable[$Key] -lt $ExportDirHigh)) {
                             $ForwardedNameAddr = [IntPtr] ($PEBase.ToInt64() + $FunctionHashTable[$Key])
 
@@ -1324,10 +1336,10 @@ Known issues:
                         } else {
                             $Result['ForwardedName'] = ''
                         }
-                
+
                         $Result['Ordinal'] = $Key + $Base
                         $Result['RVA'] = $FunctionHashTable[$Key]
-                
+
                         $Export = New-Object PSObject -Property $Result
                         $Export.PSObject.TypeNames.Insert(0, 'PE.Export')
                         $Exports.Add($Export)
@@ -1539,7 +1551,7 @@ Known issues:
                 } catch {
                     throw "Unable to download the original file from $Request"
                 }
-                
+
                 $FileWithoutExt = $FileName.Substring(0, $FileName.LastIndexOf('.'))
                 $CabPath = Join-Path $OriginalPEDirectory "$FileWithoutExt.cab"
                 [IO.File]::WriteAllBytes($CabPath, $CabBytes)
@@ -1586,7 +1598,7 @@ Known issues:
 
             $PE
         }
-        
+
         if ($ImageType -eq 'File') {
             $Handle.Free()
         } else {

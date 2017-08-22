@@ -76,7 +76,8 @@ FunctionsToExport = @('Get-CSDisassembly',
                       'Get-ProcessModuleTrace',
                       'Unregister-ProcessModuleTrace',
                       'Invoke-LoadLibrary',
-                      'New-DllExportFunction')
+                      'New-DllExportFunction',
+                      'Get-NativeUndecoratedName')
 
 # Cmdlets to export from this module
 CmdletsToExport = ''

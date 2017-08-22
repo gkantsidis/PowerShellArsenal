@@ -435,6 +435,9 @@
                             <Label>FunctionName</Label>
                         </TableColumnHeader>
                         <TableColumnHeader>
+                            <Label>FunctionNameUndecorated</Label>
+                        </TableColumnHeader>
+                        <TableColumnHeader>
                             <Label>Ordinal</Label>
                         </TableColumnHeader>
                         <TableColumnHeader>
@@ -449,6 +452,9 @@
                                 </TableColumnItem>
                                 <TableColumnItem>
                                     <PropertyName>FunctionName</PropertyName>
+                                </TableColumnItem>
+                                <TableColumnItem>
+                                    <PropertyName>FunctionNameUndecorated</PropertyName>
                                 </TableColumnItem>
                                 <TableColumnItem>
                                     <ScriptBlock>if ($_.Ordinal) {"0x$($_.Ordinal.ToString('X4'))"}</ScriptBlock>
@@ -473,6 +479,9 @@
                             <Label>FunctionName</Label>
                         </TableColumnHeader>
                         <TableColumnHeader>
+                            <Label>FunctionNameUndecorated</Label>
+                        </TableColumnHeader>
+                        <TableColumnHeader>
                             <Label>ForwardedName</Label>
                         </TableColumnHeader>
                         <TableColumnHeader>
@@ -487,6 +496,9 @@
                             <TableColumnItems>
                                 <TableColumnItem>
                                     <PropertyName>FunctionName</PropertyName>
+                                </TableColumnItem>
+                                <TableColumnItem>
+                                    <PropertyName>FunctionNameUndecorated</PropertyName>
                                 </TableColumnItem>
                                 <TableColumnItem>
                                     <PropertyName>ForwardedName</PropertyName>
