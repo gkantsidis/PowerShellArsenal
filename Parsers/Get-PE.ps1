@@ -577,7 +577,7 @@ Known issues:
                     return
                 }
 
-                $FilePath = (Resolve-Path $FilePath).Path
+                $FilePath = (Resolve-Path $FilePath).ProviderPath
 
                 $ModuleName = $FilePath
                 # Treat a byte array as if it were a file on disk
