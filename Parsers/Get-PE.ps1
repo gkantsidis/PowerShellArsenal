@@ -93,7 +93,7 @@ meterpreter binary (metsrv.dll).
 
 C:\PS> $Proc = Get-Process Skype
 C:\PS> $skype = $Proc.Modules | ? {$_.ModuleName -eq 'Skype.exe'}
-C:\PS> $Get-PE -ProcessID $Proc.ID -ModuleBaseAddress $skype.BaseAddress -DumpDirectory $PWD -Verbose
+C:\PS> Get-PE -ProcessID $Proc.ID -ModuleBaseAddress $skype.BaseAddress -DumpDirectory $PWD -Verbose
 
 Description
 -----------
@@ -180,11 +180,21 @@ Known issues:
 
         [Parameter()]
         [Switch]
-        $IgnoreMalformedPE
+        $IgnoreMalformedPE,
+
+        [Switch]
+        $ShowExportsOnly,
+
+        [Switch]
+        $ShowImportsOnly
     )
 
     BEGIN
     {
+        if ($ShowExportsOnly -and $ShowImportsOnly) {
+            Write-Error -Message "Only one of ShowExportsOnly and ShowImportsOnly option allowed."
+        }
+
         function local:Test-Pointer
         {
         <#
@@ -1215,6 +1225,11 @@ Known issues:
             }
         }
 
+        if ($ShowImportsOnly -and ($Imports -ne $null)) {
+            $Imports
+            # TODO: It would be nice to terminate here, but we need the cleanup
+        }
+
         Write-Verbose 'Processing exports...'
 
         # Process exports
@@ -1381,6 +1396,11 @@ Known issues:
                     $ModuleName = $ExportName
                 }
             }
+        }
+
+        if ($ShowExportsOnly -and ($Exports -ne $null)) {
+            $Exports
+            # TODO: It would be nice to terminate here, but we need the cleanup
         }
 
         # Dump the in-memory version of the module to disk.
@@ -1596,7 +1616,9 @@ Known issues:
             }
             $PE = Add-Member @Properties
 
-            $PE
+            if (-not ($ShowImportsOnly -or $ShowExportsOnly)) {
+                $PE
+            }
         }
 
         if ($ImageType -eq 'File') {

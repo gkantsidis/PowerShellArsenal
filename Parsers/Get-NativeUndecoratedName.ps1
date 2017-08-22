@@ -1,5 +1,9 @@
-$DbgHelp = Invoke-LoadLibrary dbghelp
-$undecorate = New-DllExportFunction -Module $DbgHelp -ProcedureName UnDecorateSymbolName -Parameters ([string], [System.Text.StringBuilder], [UInt32], [UInt32]) -ReturnType ([Int])
+$DbgHelp = Invoke-LoadLibrary dbghelp -ErrorAction SilentlyContinue
+if ($DbgHelp -ne $null) {
+    $undecorate = New-DllExportFunction -Module $DbgHelp -ProcedureName UnDecorateSymbolName -Parameters ([string], [System.Text.StringBuilder], [UInt32], [UInt32]) -ReturnType ([Int])
+} else {
+    $undecorate = $null
+}
 
 function Get-NativeUndecoratedName {
     [CmdletBinding()]
@@ -7,6 +11,16 @@ function Get-NativeUndecoratedName {
         [ValidateNotNullOrEmpty()]
         [string]$DecoratedSymbol
     )
+
+    if ($undecorate -eq $null) {
+        Write-Warning -Message "Cannot find the dbghelp library; cannot get undecorated name."
+        [PSCustomObject]@{
+            SymbolType = 'C/C++'
+            Symbol     = $DecoratedSymbol
+        }
+
+        return
+    }
 
     if ($DecoratedSymbol.StartsWith('?')) {
         $StrBuilder = New-Object Text.Stringbuilder(1024)
