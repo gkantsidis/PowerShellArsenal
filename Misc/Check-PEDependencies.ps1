@@ -1,6 +1,32 @@
 #Requires -Module Environment
 
-#function Check-PEDependencies {
+Enum ModuleTypeGuess {
+    Native
+    DotNet
+    Unknown
+}
+
+class ModuleLocationInfo
+{
+    [string]$Name
+    [int]$Distance
+    [int]$Count
+    [string]$Parent
+    [string]$Location
+    [ModuleTypeGuess]$ModuleType
+
+    ModuleLocationInfo([string]$Name, [int]$Distance, [string]$Parent)
+    {
+        $this.Name = $Name
+        $this.Distance = $Distance
+        $this.Parent = $Parent
+        $this.Location = [string]::Empty
+        $this.ModuleType = [ModuleTypeGuess]::Unknown
+        $this.Count = 1
+    }
+}
+
+function Check-PEDependencies {
     [CmdletBinding()]
     param(
         [ValidateNotNullOrEmpty()]
@@ -10,8 +36,12 @@
 
         [switch]$ShallowDependencies,
 
+        [Int]$Depth,
+
         [switch]$ShowMissingOnly
     )
+
+    $OriginalFilePath = $FilePath
 
     [string[]]$paths = $Env:Path.Split(';', [StringSplitOptions]::RemoveEmptyEntries) | `
                        ForEach-Object -Process {
@@ -141,8 +171,14 @@
     [string[]]$modules = $pe.Imports.ModuleName
     $modules = $modules | Sort-Object -Unique
 
-    $visited = New-Object -Type 'System.Collections.Generic.HashSet[string]' -ArgumentList @(,$modules)
+    $visited = New-Object -Type 'System.Collections.Generic.Dictionary[string,ModuleLocationInfo]'
     $queue = New-Object -Type 'System.Collections.Generic.Stack[string]' -ArgumentList @(,$modules)
+
+    foreach ($module in $modules) {
+        $m = [ModuleLocationInfo]::new($module, 1, $OriginalFilePath)
+        $m.ModuleType = [ModuleTypeGuess]::Native
+        $visited.Add($module, $m)
+    }
 
     while ($queue.Count -gt 0) {
         $module = $queue.Pop()
@@ -176,10 +212,13 @@
             $missing += $module
             continue
         } else {
-            $existing += $modulePath
+            $existing += $module
         }
 
-        if ($ShallowDependencies) {
+        $prevm = $visited[$module]
+        $prevm.Location = $modulePath
+
+        if ($ShallowDependencies -or (($Depth -gt 0) -and ($prevm.Distance -ge $Depth))) {
             continue
         }
 
@@ -202,12 +241,17 @@
 
         [string[]]$subModules = $modulePe.Imports.ModuleName
         foreach ($subModule in $subModules) {
-            if ($visited.Contains($subModule)) {
+            if ($visited.ContainsKey($subModule)) {
+                $smr = $visited[$subModule]
+                $smr.Count += 1
                 continue
             }
             Write-Debug -Message "Found submodule: $subModule"
             $queue.Push($subModule) | Out-Null
-            $visited.Add($subModule) | Out-Null
+
+            $m = [ModuleLocationInfo]::new($subModule, $prevm.Distance + 1, $module)
+            $m.ModuleType = [ModuleTypeGuess]::Native
+            $visited.Add($subModule, $m) | Out-Null
         }
     }
 
@@ -215,8 +259,11 @@
         $missing
     } else {
         [PSCustomObject]@{
-            Existing = $existing
-            Missing = $missing
+            # E = $existing
+            # M = $missing
+            # V = $visited
+            Existing = ($existing | ForEach-Object -Process { $visited[$_] })
+            Missing = ($missing | ForEach-Object -Process { $visited[$_] })
         }
     }
-#}
+}
