@@ -1,5 +1,3 @@
-#Requires -Module Environment
-
 Enum ModuleTypeGuess {
     Native
     DotNet
@@ -27,15 +25,65 @@ class ModuleLocationInfo
 }
 
 function Get-PEDependencies {
-    [CmdletBinding()]
+    <#
+    .SYNOPSIS
+    Collects the dependencies of an .EXE/.DLL on other dependencies.
+
+    .DESCRIPTION
+    Open a Portable Executable (PE) file (.EXE or .DLL) and search for its dependencies
+    on other modules (.DLLs); continue recursively on their dependencies.
+
+    If the target PE is not in the same directory it will also search in the PATH.
+    If the name of the target does not specify an extension, the search will try both .EXE and .DLL.
+
+    The search cannot find modules (.DLLs) loaded dynamically.
+
+    TODO: The search currently does not detect managed dependencies.
+
+    .PARAMETER FilePath
+    The full path or file name of the PE.
+
+    .PARAMETER AsShim
+    Assume that the executable has been created with shimgen (common for programs installed with chocolatey).
+    With this option, it will recover the proper name of the file and search based on that.
+
+    .PARAMETER ShallowDependencies
+    Search only direct dependencies.
+
+    .PARAMETER Depth
+    Limit the search to the specified depth. Useful for reducing the search time, and avoiding bogus dependencies.
+
+    .PARAMETER ShowMissingOnly
+    Show only the names of the missing dependencies.
+
+    .EXAMPLE
+    PS C:> Get-PEDependencies notepad
+
+    .EXAMPLE
+    PS C:> Get-PEDependencies -FilePath notepad -ShowMissingOnly
+
+    .EXAMPLE
+    PS C:> Get-PEDependencies -FilePath explorer -ShallowDependencies
+
+    .EXAMPLE
+    PS C:> Get-PEDependencies -FilePath cmd -Depth 2
+
+    .NOTES
+    TODO: Search also for managed dependencies.
+    #>
+
+    [CmdletBinding(DefaultParametersetName="NoSearchLimit")]
     param(
+        [Parameter(Position=1)]
         [ValidateNotNullOrEmpty()]
         [string]$FilePath,
 
         [switch]$AsShim,
 
+        [Parameter(ParameterSetName='ShallowDependencies')]
         [switch]$ShallowDependencies,
 
+        [Parameter(ParameterSetName='ScopedDependencies')]
         [Int]$Depth,
 
         [switch]$ShowMissingOnly
@@ -182,14 +230,16 @@ function Get-PEDependencies {
 
     $processed = 0
     while ($queue.Count -gt 0) {
+        $percent = (100.0 * $processed / ($processed + $queue.Count))
         $module = $queue.Pop()
 
-        Write-Progress -Activity "Finding dependencies" -Status "Examining: $module" -PercentComplete (100.0 * $processed / ($processed + $queue.Count))
+        Write-Progress -Activity "Finding dependencies" -Status "Examining: $module" -PercentComplete $percent
         $processed += 1
 
         Write-Debug -Message "Examining Module: $module"
         if ($module -eq "mscoree.dll") {
-            Write-Verbose -Message "This is .NET PE"
+            Write-Debug -Message "This is .NET PE"
+            Write-Warning -Message "Reading inside managed PEs not implemented yet"
             $IsDotNet = $true
         }
 
@@ -213,7 +263,11 @@ function Get-PEDependencies {
                 Write-Warning -Message "Cannot find module $module"
             }
 
-            $missing += $module
+            if ($ShowMissingOnly) {
+                Write-Output $module
+            } else {
+                $missing += $module
+            }
             continue
         } else {
             $existing += $module
@@ -268,7 +322,7 @@ function Get-PEDependencies {
     #
 
     if ($ShowMissingOnly) {
-        $missing
+        # Do nothing: we output as we discover
     } else {
         [PSCustomObject]@{
             # E = $existing
