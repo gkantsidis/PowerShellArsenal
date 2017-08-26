@@ -26,7 +26,7 @@ class ModuleLocationInfo
     }
 }
 
-function Check-PEDependencies {
+function Get-PEDependencies {
     [CmdletBinding()]
     param(
         [ValidateNotNullOrEmpty()]
@@ -180,8 +180,12 @@ function Check-PEDependencies {
         $visited.Add($module, $m)
     }
 
+    $processed = 0
     while ($queue.Count -gt 0) {
         $module = $queue.Pop()
+
+        Write-Progress -Activity "Finding dependencies" -Status "Examining: $module" -PercentComplete (100.0 * $processed / ($processed + $queue.Count))
+        $processed += 1
 
         Write-Debug -Message "Examining Module: $module"
         if ($module -eq "mscoree.dll") {
@@ -254,6 +258,14 @@ function Check-PEDependencies {
             $visited.Add($subModule, $m) | Out-Null
         }
     }
+
+    #
+    # TODO: Enumerate Managed Dependencies
+    #
+
+    #
+    # Create output
+    #
 
     if ($ShowMissingOnly) {
         $missing
